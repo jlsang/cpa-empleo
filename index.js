@@ -139,3 +139,4 @@ app.listen(PORT, () => {
   console.log(`Servidor CPA de empleo escuchando en http://localhost:${PORT}`);
   console.log(`Almacenamiento: ${STORAGE_BACKEND}`);
 });
+module.exports = app;

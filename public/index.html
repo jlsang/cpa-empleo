@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CPA Empleo · Análisis de Currículums</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 0;
+      background: #f4f6f8;
+      color: #1f2933;
+    }
+    header {
+      background: #0b5394;
+      color: #fff;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    header h1 { margin: 0; font-size: 1.4rem; }
+    main {
+      max-width: 780px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    .tarjeta {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    label { font-weight: 600; display: block; margin-bottom: .5rem; }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: .75rem;
+      border: 1px solid #cbd2d9;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: .95rem;
+      resize: vertical;
+    }
+    button {
+      margin-top: 1rem;
+      background: #0b5394;
+      color: #fff;
+      border: none;
+      padding: .75rem 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .separador {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      color: #7b8794;
+      margin: 1.5rem 0;
+      font-size: .9rem;
+    }
+    .separador::before,
+    .separador::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid #cbd2d9;
+    }
+    .separador::before { margin-right: .75rem; }
+    .separador::after { margin-left: .75rem; }
+    input[type="file"] {
+      display: block;
+      margin-bottom: .5rem;
+    }
+    .nota { font-size: .85rem; color: #7b8794; margin-top: .25rem; }
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #resultado { margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CPA Empleo · Análisis de Currículums</h1>
+  </header>
+
+  <main>
+    <div class="tarjeta">
+      <label for="archivo">Seleccione su archivo para después subir y analizar, o si lo prefiere, puede copiar y pegar el texto del currículo en la casilla de abajo.</label>
+      <input type="file" id="archivo" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+      <p class="nota">Tamaño máximo: 5 MB.</p>
+      <button id="subir">Subir y analizar</button>
+
+      <div class="separador">o</div>
+
+      <label for="curriculum">Pega el texto del currículum</label>
+      <textarea id="curriculum" placeholder="Copia aquí el contenido del currículum..."></textarea>
+      <button id="analizar">Analizar texto</button>
+
+      <div id="resultado"></div>
+    </div>
+
+    <div class="tarjeta" style="margin-top:1.5rem">
+      <label>Reporte de análisis</label>
+      <a href="/obtener-reporte"><button type="button">Desbloquear Reporte de Empleabilidad (PDF)</button></a>
+    </div>
+
+    <div class="tarjeta" style="margin-top:1.5rem">
+      <label>Candidatos guardados</label>
+      <button id="verCandidatos">Actualizar lista</button>
+      <div id="listaCandidatos"></div>
+    </div>
+  </main>
+
+  <script>
+    const boton = document.getElementById('analizar');
+    const botonSubir = document.getElementById('subir');
+    const areaTexto = document.getElementById('curriculum');
+    const inputArchivo = document.getElementById('archivo');
+    const resultado = document.getElementById('resultado');
+    const botonVer = document.getElementById('verCandidatos');
+    const listaCandidatos = document.getElementById('listaCandidatos');
+
+    function mostrarError(mensaje) {
+      resultado.innerHTML = '<p style="color:#c0392b">' + mensaje + '</p>';
+    }
+
+    function mostrarResultado(datos) {
+      const titulo = datos.archivo ? 'Resultado · ' + datos.archivo : 'Resultado';
+      resultado.innerHTML = '<h3>' + titulo + '</h3><pre>' +
+        JSON.stringify(datos.resultado, null, 2) + '</pre>';
+      cargarCandidatos();
+    }
+
+    // Carga y muestra la lista de candidatos guardados.
+    async function cargarCandidatos() {
+      try {
+        const respuesta = await fetch('/api/candidatos');
+        const datos = await respuesta.json();
+        if (!datos.candidatos || datos.candidatos.length === 0) {
+          listaCandidatos.innerHTML = '<p class="nota">Aún no hay candidatos guardados.</p>';
+          return;
+        }
+        const filas = datos.candidatos.map(function (c) {
+          const nombre = (c.resultado && c.resultado.nombre) ? c.resultado.nombre : (c.archivo || '(sin nombre)');
+          const fecha = new Date(c.fecha).toLocaleString();
+          return '<li><strong>' + nombre + '</strong> <span class="nota">· ' + fecha + '</span></li>';
+        }).join('');
+        listaCandidatos.innerHTML = '<p class="nota">' + datos.total + ' candidato(s):</p><ul>' + filas + '</ul>';
+      } catch (err) {
+        listaCandidatos.innerHTML = '<p style="color:#c0392b">No se pudo cargar la lista: ' + err.message + '</p>';
+      }
+    }
+
+    botonVer.addEventListener('click', cargarCandidatos);
+    cargarCandidatos();
+
+    // Subida de archivo (PDF / Word)
+    botonSubir.addEventListener('click', async () => {
+      const archivo = inputArchivo.files[0];
+      if (!archivo) {
+        mostrarError('Por favor, selecciona un archivo PDF o Word.');
+        return;
+      }
+
+      botonSubir.disabled = true;
+      botonSubir.textContent = 'Analizando...';
+      resultado.innerHTML = '';
+
+      try {
+        const formData = new FormData();
+        formData.append('curriculum', archivo);
+
+        const respuesta = await fetch('/api/subir-curriculum', {
+          method: 'POST',
+          body: formData
+        });
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(datos.error || 'Error desconocido');
+        }
+        mostrarResultado(datos);
+      } catch (err) {
+        mostrarError('Error: ' + err.message);
+      } finally {
+        botonSubir.disabled = false;
+        botonSubir.textContent = 'Subir y analizar';
+      }
+    });
+
+    boton.addEventListener('click', async () => {
+      const texto = areaTexto.value.trim();
+      if (!texto) {
+        mostrarError('Por favor, pega el texto de un currículum.');
+        return;
+      }
+
+      boton.disabled = true;
+      boton.textContent = 'Analizando...';
+      resultado.innerHTML = '';
+
+      try {
+        const respuesta = await fetch('/api/procesar-curriculum', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto })
+        });
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(datos.error || 'Error desconocido');
+        }
+        mostrarResultado(datos);
+      } catch (err) {
+        mostrarError('Error: ' + err.message);
+      } finally {
+        boton.disabled = false;
+        boton.textContent = 'Analizar texto';
+      }
+    });
+  </script>
+</body>
+</html>

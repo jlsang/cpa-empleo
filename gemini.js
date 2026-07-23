@@ -1,6 +1,5 @@
 // Integración con la API de Gemini para procesar currículums.
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { PDFParse } = require('pdf-parse');
 const mammoth = require('mammoth');
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -66,19 +65,26 @@ async function extraerTexto(buffer, mimetype, nombreArchivo = '') {
     mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     nombre.endsWith('.docx');
 
-  if (esPDF) {
-    const parser = new PDFParse({ data: buffer });
-    try {
-      const resultado = await parser.getText();
-      return resultado.text.trim();
-    } finally {
-      await parser.destroy();
+  if (esPDF || esDocx) {
+    // Si es Word (.docx), usamos mammoth para extraer el texto limpiamente
+    if (esDocx) {
+      const resultado = await mammoth.extractRawText({ buffer });
+      return resultado.value.trim();
     }
-  }
-
-  if (esDocx) {
-    const resultado = await mammoth.extractRawText({ buffer });
-    return resultado.value.trim();
+    
+    // Si es PDF, convertimos el buffer a base64 para que Gemini lo procese directamente de forma nativa en la nube
+    const base64Data = buffer.toString('base64');
+    const modelo = obtenerModelo();
+    const respuesta = await modelo.generateContent([
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: 'application/pdf'
+        }
+      },
+      'Extrae y devuelve todo el texto plano contenido en este documento PDF de currículum, sin agregar comentarios adicionales.'
+    ]);
+    return respuesta.response.text().trim();
   }
 
   throw new Error('Formato no soportado. Sube un archivo PDF o Word (.docx).');
